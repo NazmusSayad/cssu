@@ -1,0 +1,65 @@
+@server {
+  port: env(PORT, 3000);
+  database: env(DATABASE, ./test.db);
+}
+
+@database {
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT
+  );
+  CREATE INDEX users_email ON users(email);
+}
+
+[path="/"]:GET {
+  @return html("<h1>Hello from CSS Server!</h1>");
+}
+
+[path="/users"]:GET {
+  @return json(sql("SELECT * FROM users"));
+}
+
+[path="/users"]:POST {
+  --name: body(name);
+  --email: body(email);
+  @return json(sql("INSERT INTO users (name, email) VALUES (?, ?)", var(--name), var(--email)));
+}
+
+[path="/users/:id"]:GET {
+  --id: param(:id);
+  --user: sql("SELECT * FROM users WHERE id = ?", var(--id));
+  @return json(if(--user: var(--user); else: { "error": "User not found" }));
+}
+
+[path="/users/:id"]:PUT {
+  --id: param(:id);
+  --name: body(name);
+  --email: body(email);
+  @return json(sql("UPDATE users SET name = ?, email = ? WHERE id = ?", var(--name), var(--email), var(--id)));
+}
+
+[path="/users/:id"]:DELETE {
+  --id: param(:id);
+  @return json(sql("DELETE FROM users WHERE id = ?", var(--id)));
+}
+
+[path="/search"]:GET {
+  --q: query(q);
+  --results: sql("SELECT * FROM users WHERE name LIKE ?", var(--q));
+  @return json(if(--q: var(--results); else: []));
+}
+
+[path="/admin"]:GET {
+  --role: header(x-user-role);
+  status: if(--role = admin: 200; else: 403);
+  @return json(if(
+    --role = admin: { "message": "Welcome, admin!" };
+    else: { "error": "Access denied" };
+  ));
+}
+
+[path="*"]:GET {
+  status: 404;
+  @return json({ "error": "Not found" });
+}

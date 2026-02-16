@@ -1,0 +1,11 @@
+@server {
+  port: env(PORT, 3000);
+}
+
+[path="/"]:GET {
+  @return html("<h1>Static Pages</h1>");
+}
+
+[path="/about"]:GET {
+  @return html("<h2>About CSS Server</h2><p>Write servers in CSS.</p>");
+}

@@ -1,0 +1,26 @@
+@server {
+  port: env(PORT, 3000);
+  database: env(DATABASE, ./api.db);
+}
+
+@database {
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL
+  );
+}
+
+[path="/users"]:GET {
+  @return json(sql("SELECT * FROM users"));
+}
+
+[path="/users"]:POST {
+  --name: body(name);
+  --email: body(email);
+  status: if(--name and --email: 201; else: 400);
+  @return json(if(
+    --name and --email: sql("INSERT INTO users (name, email) VALUES (?, ?)", var(--name), var(--email));
+    else: { "error": "name and email are required" };
+  ));
+}

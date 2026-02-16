@@ -1,0 +1,11 @@
+@server {
+  port: env(PORT, 3000);
+}
+
+[path="/"]:GET {
+  @return html("<h1>CSS Server</h1>");
+}
+
+[path="/health"]:GET {
+  @return json({ "status": "ok" });
+}
