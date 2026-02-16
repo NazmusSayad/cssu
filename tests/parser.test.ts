@@ -44,6 +44,27 @@ describe('Parser', () => {
       expect(result.config.port).toBe(5000)
       delete process.env.MY_PORT
     })
+
+    it('should parse env() without fallback', () => {
+      delete process.env.MISSING_ENV
+      const css = `
+        @server {
+          database: env(MISSING_ENV);
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.config.database).toBe('')
+    })
+
+    it('should parse env() with quoted fallback', () => {
+      const css = `
+        @server {
+          host: env(HOST, "127.0.0.1");
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.config.host).toBe('127.0.0.1')
+    })
   })
 
   describe('Route Parsing', () => {
@@ -100,6 +121,40 @@ describe('Parser', () => {
       `
       const result = parseCSS(css)
       expect(result.routes[0].path).toBe('*')
+    })
+
+    it('should ignore rules without path selector', () => {
+      const css = `
+        .button {
+          color: red;
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes).toHaveLength(0)
+    })
+
+    it('should ignore rules without method pseudo', () => {
+      const css = `
+        [path="/users"] {
+          @return json({});
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes).toHaveLength(0)
+    })
+
+    it('should parse multiple return rules with last one winning', () => {
+      const css = `
+        [path="/users"]:GET {
+          @return json({ "ok": false });
+          @return json({ "ok": true });
+        }
+      `
+      const result = parseCSS(css)
+      const returnVal = result.routes[0].return.value
+      if (isExpressionType(returnVal, 'json')) {
+        expect(returnVal.value).toEqual({ ok: true })
+      }
     })
   })
 
@@ -161,6 +216,17 @@ describe('Parser', () => {
       const result = parseCSS(css)
       expect(result.routes[0].variables[1].value.type).toBe('var')
     })
+
+    it('should allow variables declared after return', () => {
+      const css = `
+        [path="/test"]:GET {
+          @return json({ "ok": true });
+          --late: 1;
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes[0].variables[0].name).toBe('late')
+    })
   })
 
   describe('SQL Parsing', () => {
@@ -203,6 +269,20 @@ describe('Parser', () => {
       const returnVal = result.routes[0].return.value
       if (isExpressionType(returnVal, 'sql')) {
         expect(returnVal.args).toHaveLength(2)
+      }
+    })
+
+    it('should parse SQL with nested expressions as args', () => {
+      const css = `
+        [path="/users/:id"]:GET {
+          --id: param(:id);
+          @return json(sql("SELECT * FROM users WHERE id = ?", var(--id)));
+        }
+      `
+      const result = parseCSS(css)
+      const returnVal = result.routes[0].return.value
+      if (isExpressionType(returnVal, 'sql')) {
+        expect(returnVal.args[0].type).toBe('var')
       }
     })
   })
@@ -300,6 +380,20 @@ describe('Parser', () => {
         expect(returnVal.branches[0].condition.type).toBe('or')
       }
     })
+
+    it('should parse not condition', () => {
+      const css = `
+        [path="/test"]:GET {
+          --flag: 1;
+          @return json(if(not --flag: "no"; else: "yes"));
+        }
+      `
+      const result = parseCSS(css)
+      const returnVal = result.routes[0].return.value
+      if (isExpressionType(returnVal, 'if')) {
+        expect(returnVal.branches[0].condition.type).toBe('not')
+      }
+    })
   })
 
   describe('Status Parsing', () => {
@@ -326,6 +420,18 @@ describe('Parser', () => {
       const result = parseCSS(css)
       expect(result.routes[0].status?.type).toBe('if')
     })
+
+    it('should parse status from var', () => {
+      const css = `
+        [path="/test"]:GET {
+          --code: 201;
+          status: var(--code);
+          @return json({});
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes[0].status?.type).toBe('var')
+    })
   })
 
   describe('Database Schema Parsing', () => {
@@ -349,6 +455,20 @@ describe('Parser', () => {
       `
       const result = parseCSS(css)
       expect(result.schema).toBeUndefined()
+    })
+
+    it('should keep first @database block when multiple exist', () => {
+      const css = `
+        @database {
+          CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
+        }
+        @database {
+          CREATE TABLE posts (id INTEGER PRIMARY KEY, title TEXT);
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.schema).toContain('CREATE TABLE users')
+      expect(result.schema).not.toContain('CREATE TABLE posts')
     })
   })
 
@@ -385,6 +505,51 @@ describe('Parser', () => {
       if (isExpressionType(returnVal, 'json')) {
         expect(returnVal.value).toEqual([])
       }
+    })
+
+    it('should parse default json return when no wrapper', () => {
+      const css = `
+        [path="/test"]:GET {
+          @return { "ok": true };
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes[0].return.type).toBe('json')
+    })
+  })
+
+  describe('Literal Parsing', () => {
+    it('should parse negative numbers', () => {
+      const css = `
+        [path="/test"]:GET {
+          --n: -12.5;
+          @return json(var(--n));
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes[0].variables[0].value).toEqual({
+        type: 'literal',
+        value: -12.5,
+      })
+    })
+
+    it('should parse true/false literals', () => {
+      const css = `
+        [path="/test"]:GET {
+          --t: true;
+          --f: false;
+          @return json({});
+        }
+      `
+      const result = parseCSS(css)
+      expect(result.routes[0].variables[0].value).toEqual({
+        type: 'literal',
+        value: true,
+      })
+      expect(result.routes[0].variables[1].value).toEqual({
+        type: 'literal',
+        value: false,
+      })
     })
   })
 })

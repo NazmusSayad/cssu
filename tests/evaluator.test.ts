@@ -94,6 +94,21 @@ describe('Evaluator', () => {
       const expr: Expression = { type: 'header', headerName: 'X-User-Role' }
       expect(evaluateExpression(expr, ctx)).toBe('admin')
     })
+
+    it('should return undefined for missing param/query/body/header', () => {
+      expect(
+        evaluateExpression({ type: 'param', paramName: 'missing' }, ctx)
+      ).toBeUndefined()
+      expect(
+        evaluateExpression({ type: 'query', paramName: 'missing' }, ctx)
+      ).toBeUndefined()
+      expect(
+        evaluateExpression({ type: 'body', fieldName: 'missing' }, ctx)
+      ).toBeUndefined()
+      expect(
+        evaluateExpression({ type: 'header', headerName: 'missing' }, ctx)
+      ).toBeUndefined()
+    })
   })
 
   describe('Variable references', () => {
@@ -106,6 +121,20 @@ describe('Evaluator', () => {
     it('should return undefined for missing var', () => {
       const expr: Expression = { type: 'var', name: 'missing' }
       expect(evaluateExpression(expr, ctx)).toBeUndefined()
+    })
+
+    it('should return undefined for missing var used in if', () => {
+      const expr: Expression = {
+        type: 'if',
+        branches: [
+          {
+            condition: { type: 'truthy', varName: 'missing' },
+            value: { type: 'literal', value: 'yes' },
+          },
+        ],
+        elseValue: { type: 'literal', value: 'no' },
+      }
+      expect(evaluateExpression(expr, ctx)).toBe('no')
     })
   })
 
@@ -379,6 +408,38 @@ describe('Evaluator', () => {
       }
       expect(evaluateExpression(expr, ctx)).toBe('limited access')
     })
+
+    it('should handle if without else', () => {
+      ctx.variables = { x: 0 }
+      const expr: Expression = {
+        type: 'if',
+        branches: [
+          {
+            condition: { type: 'truthy', varName: 'x' },
+            value: { type: 'literal', value: 'yes' },
+          },
+        ],
+      }
+      expect(evaluateExpression(expr, ctx)).toBeNull()
+    })
+
+    it('should handle not condition', () => {
+      ctx.variables = { blocked: true }
+      const expr: Expression = {
+        type: 'if',
+        branches: [
+          {
+            condition: {
+              type: 'not',
+              condition: { type: 'truthy', varName: 'blocked' },
+            },
+            value: { type: 'literal', value: 'allowed' },
+          },
+        ],
+        elseValue: { type: 'literal', value: 'blocked' },
+      }
+      expect(evaluateExpression(expr, ctx)).toBe('blocked')
+    })
   })
 
   describe('JSON/HTML expressions', () => {
@@ -390,6 +451,18 @@ describe('Evaluator', () => {
     it('should return html value', () => {
       const expr: Expression = { type: 'html', value: '<h1>Hello</h1>' }
       expect(evaluateExpression(expr, ctx)).toBe('<h1>Hello</h1>')
+    })
+
+    it('should concatenate strings', () => {
+      const expr: Expression = {
+        type: 'concat',
+        parts: [
+          { type: 'literal', value: 'Hello' },
+          { type: 'literal', value: ' ' },
+          { type: 'literal', value: 'World' },
+        ],
+      }
+      expect(evaluateExpression(expr, ctx)).toBe('Hello World')
     })
   })
 

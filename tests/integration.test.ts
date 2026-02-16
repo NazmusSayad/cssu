@@ -56,6 +56,10 @@ describe('Integration Tests', () => {
         @return json(if(--q: var(--results); else: []));
       }
 
+      [path="/ping"]:GET {
+        @return json({ "ok": true });
+      }
+
       [path="/admin"]:GET {
         --role: header(x-user-role);
         status: if(--role = admin: 200; else: 403);
@@ -181,5 +185,15 @@ describe('Integration Tests', () => {
     const res = await fetchGet('/unknown')
     expect(res.status).toBe(404)
     expect(res.body.error).toBe('Not found')
+  })
+
+  it('should handle array query params as comma-separated', async () => {
+    const res = await fetchGet('/search?q=John&q=Jane')
+    expect(res.status).toBe(200)
+  })
+
+  it('should return JSON content type for json route', async () => {
+    const res = await fetch(`http://localhost:3333/ping`)
+    expect(res.headers.get('content-type')).toContain('application/json')
   })
 })
