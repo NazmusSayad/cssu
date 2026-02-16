@@ -7,7 +7,7 @@
   },
   "scripts": {
     "prepare": "husky",
-    "lint": "eslint .",
+    "lint": "tsc --noEmit && eslint .",
     "fix": "eslint . --fix",
     "tc": "tsc --noEmit --watch",
     "exports": "tsx ./write-exports.ts",
