@@ -10,7 +10,7 @@ import {
   VariableAssignment,
 } from './types.js'
 
-const HTTP_METHODS: HttpMethod[] = [
+const _HTTP_METHODS: HttpMethod[] = [
   'GET',
   'POST',
   'PUT',
@@ -119,10 +119,8 @@ function parseRoutes(root: Root): RouteRule[] {
     if (!path || !method) return
 
     const variables: VariableAssignment[] = []
-    let status:
-      | { type: 'literal' | 'var' | 'if'; value: number | Expression }
-      | undefined
-    let returnValue: { type: 'json' | 'html'; value: Expression } | undefined
+    let status: RouteRule['status'] | undefined
+    let returnValue: RouteRule['return'] | undefined
 
     rule.walkDecls((decl) => {
       if (decl.prop.startsWith('--')) {
@@ -198,62 +196,62 @@ function parseReturnAtRule(atRule: AtRule): {
 }
 
 function parseExpression(value: string): Expression {
-  value = value.trim()
+  const trimmedValue = value.trim()
 
-  if (value.startsWith('sql(')) {
-    return parseSqlExpression(value)
+  if (trimmedValue.startsWith('sql(')) {
+    return parseSqlExpression(trimmedValue)
   }
 
-  if (value.startsWith('param(')) {
-    const inner = extractFunctionContent(value, 'param')
+  if (trimmedValue.startsWith('param(')) {
+    const inner = extractFunctionContent(trimmedValue, 'param')
     return { type: 'param', paramName: inner.replace(/^:/, '') }
   }
 
-  if (value.startsWith('query(')) {
-    const inner = extractFunctionContent(value, 'query')
+  if (trimmedValue.startsWith('query(')) {
+    const inner = extractFunctionContent(trimmedValue, 'query')
     return { type: 'query', paramName: inner }
   }
 
-  if (value.startsWith('body(')) {
-    const inner = extractFunctionContent(value, 'body')
+  if (trimmedValue.startsWith('body(')) {
+    const inner = extractFunctionContent(trimmedValue, 'body')
     return { type: 'body', fieldName: inner }
   }
 
-  if (value.startsWith('header(')) {
-    const inner = extractFunctionContent(value, 'header')
+  if (trimmedValue.startsWith('header(')) {
+    const inner = extractFunctionContent(trimmedValue, 'header')
     return { type: 'header', headerName: inner }
   }
 
-  if (value.startsWith('var(')) {
-    const inner = extractFunctionContent(value, 'var')
+  if (trimmedValue.startsWith('var(')) {
+    const inner = extractFunctionContent(trimmedValue, 'var')
     return { type: 'var', name: inner.replace(/^--/, '') }
   }
 
-  if (value.startsWith('if(')) {
-    return parseIfExpression(value)
+  if (trimmedValue.startsWith('if(')) {
+    return parseIfExpression(trimmedValue)
   }
 
-  if (/^-?\d+(\.\d+)?$/.test(value)) {
-    return { type: 'literal', value: parseFloat(value) }
+  if (/^-?\d+(\.\d+)?$/.test(trimmedValue)) {
+    return { type: 'literal', value: parseFloat(trimmedValue) }
   }
 
-  if (value === 'true' || value === 'false') {
-    return { type: 'literal', value: value === 'true' }
+  if (trimmedValue === 'true' || trimmedValue === 'false') {
+    return { type: 'literal', value: trimmedValue === 'true' }
   }
 
-  if (value === 'null') {
+  if (trimmedValue === 'null') {
     return { type: 'literal', value: null }
   }
 
-  if (value.startsWith('[') || value.startsWith('{')) {
+  if (trimmedValue.startsWith('[') || trimmedValue.startsWith('{')) {
     try {
-      return { type: 'json', value: JSON.parse(value) }
+      return { type: 'json', value: JSON.parse(trimmedValue) }
     } catch {
-      return { type: 'literal', value: parseStringValue(value) }
+      return { type: 'literal', value: parseStringValue(trimmedValue) }
     }
   }
 
-  return { type: 'literal', value: parseStringValue(value) }
+  return { type: 'literal', value: parseStringValue(trimmedValue) }
 }
 
 function parseSqlExpression(value: string): Expression {
@@ -396,14 +394,14 @@ function findColonInBranch(str: string): number {
 }
 
 function parseCondition(str: string): Condition {
-  str = str.trim()
+  const trimmedStr = str.trim()
 
-  const orIndex = str.indexOf(' or ')
-  const andIndex = str.indexOf(' and ')
+  const orIndex = trimmedStr.indexOf(' or ')
+  const andIndex = trimmedStr.indexOf(' and ')
 
   if (orIndex !== -1) {
-    const left = str.slice(0, orIndex).trim()
-    const right = str.slice(orIndex + 4).trim()
+    const left = trimmedStr.slice(0, orIndex).trim()
+    const right = trimmedStr.slice(orIndex + 4).trim()
     return {
       type: 'or',
       conditions: [parseCondition(left), parseCondition(right)],
@@ -411,19 +409,19 @@ function parseCondition(str: string): Condition {
   }
 
   if (andIndex !== -1) {
-    const left = str.slice(0, andIndex).trim()
-    const right = str.slice(andIndex + 5).trim()
+    const left = trimmedStr.slice(0, andIndex).trim()
+    const right = trimmedStr.slice(andIndex + 5).trim()
     return {
       type: 'and',
       conditions: [parseCondition(left), parseCondition(right)],
     }
   }
 
-  if (str.startsWith('not ')) {
-    return { type: 'not', condition: parseCondition(str.slice(4)) }
+  if (trimmedStr.startsWith('not ')) {
+    return { type: 'not', condition: parseCondition(trimmedStr.slice(4)) }
   }
 
-  const compMatch = str.match(/^(--[\w-]+)\s*(=|!=|>=|<=|>|<)\s*(.+)$/)
+  const compMatch = trimmedStr.match(/^(--[\w-]+)\s*(=|!=|>=|<=|>|<)\s*(.+)$/)
   if (compMatch) {
     const varName = compMatch[1].replace(/^--/, '')
     const op = compMatch[2]
@@ -448,12 +446,12 @@ function parseCondition(str: string): Condition {
     }
   }
 
-  const varMatch = str.match(/^--([\w-]+)$/)
+  const varMatch = trimmedStr.match(/^--([\w-]+)$/)
   if (varMatch) {
     return { type: 'truthy', varName: varMatch[1] }
   }
 
-  return { type: 'truthy', varName: str.replace(/^--/, '') }
+  return { type: 'truthy', varName: trimmedStr.replace(/^--/, '') }
 }
 
 function extractFunctionContent(value: string, funcName: string): string {
@@ -477,15 +475,4 @@ function extractFunctionContent(value: string, funcName: string): string {
 
 function parseStringValue(value: string): string {
   return value.trim().replace(/^["']|["']$/g, '')
-}
-
-function parseJsonValue(value: string): any {
-  try {
-    const normalized = value
-      .replace(/--[\w-]+/g, (match) => '"' + match + '"')
-      .replace(/(\w+):/g, '"$1":')
-    return JSON.parse(normalized)
-  } catch {
-    return value
-  }
 }

@@ -21,7 +21,10 @@ export function closeDatabase(): void {
   }
 }
 
-export function evaluateExpression(expr: Expression, ctx: RequestContext): any {
+export function evaluateExpression(
+  expr: Expression,
+  ctx: RequestContext
+): unknown {
   switch (expr.type) {
     case 'literal':
       return expr.value
@@ -65,7 +68,7 @@ function evaluateSql(
   query: string,
   args: Expression[],
   ctx: RequestContext
-): any {
+): unknown {
   if (!db) {
     return { error: 'Database not configured' }
   }
@@ -98,7 +101,7 @@ function evaluateSql(
 
     return stmt.run(...evaluatedArgs)
   } catch (error) {
-    return { error: (error as Error).message }
+    return { error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }
 
@@ -106,7 +109,7 @@ function evaluateIf(
   branches: { condition: Condition; value: Expression }[],
   elseValue: Expression | undefined,
   ctx: RequestContext
-): any {
+): unknown {
   for (const branch of branches) {
     if (evaluateCondition(branch.condition, ctx)) {
       return evaluateExpression(branch.value, ctx)
@@ -129,7 +132,9 @@ function evaluateCondition(condition: Condition, ctx: RequestContext): boolean {
       if (typeof value === 'number') return value !== 0
       if (typeof value === 'string') return value.length > 0
       if (Array.isArray(value)) return value.length > 0
-      if (typeof value === 'object') return Object.keys(value).length > 0
+      if (typeof value === 'object') {
+        return Object.keys(value as Record<string, unknown>).length > 0
+      }
       return true
     }
 

@@ -1,11 +1,11 @@
-import { Request, Response } from 'express'
+import { Request, RequestHandler, Response } from 'express'
 import { evaluateExpression } from './evaluator.js'
 import { HttpMethod, RequestContext, RouteRule } from './types.js'
 
 export interface CompiledRoute {
   path: string
   method: HttpMethod
-  handler: (req: Request, res: Response) => Promise<void>
+  handler: RequestHandler
 }
 
 export function compileRoutes(routes: RouteRule[]): CompiledRoute[] {
@@ -20,15 +20,13 @@ function compileRoute(route: RouteRule): CompiledRoute {
   }
 }
 
-function createHandler(
-  route: RouteRule
-): (req: Request, res: Response) => Promise<void> {
-  return async (req: Request, res: Response) => {
+function createHandler(route: RouteRule): RequestHandler {
+  return (req: Request, res: Response) => {
     const ctx: RequestContext = {
-      params: req.params,
-      query: req.query as Record<string, string>,
-      body: req.body || {},
-      headers: req.headers as Record<string, string>,
+      params: normalizeParams(req.params),
+      query: normalizeQuery(req.query),
+      body: normalizeBody(req.body),
+      headers: normalizeHeaders(req.headers),
       variables: {},
     }
 
@@ -39,9 +37,11 @@ function createHandler(
     if (route.status) {
       const statusValue =
         route.status.type === 'literal'
-          ? (route.status.value as number)
-          : (evaluateExpression(route.status.value as any, ctx) as number)
-      res.status(statusValue)
+          ? route.status.value
+          : Number(evaluateExpression(route.status.value, ctx))
+      if (Number.isFinite(statusValue)) {
+        res.status(statusValue)
+      }
     }
 
     const result = evaluateExpression(route.return.value, ctx)
@@ -49,7 +49,61 @@ function createHandler(
     if (route.return.type === 'json') {
       res.json(result)
     } else {
-      res.send(result)
+      res.send(typeof result === 'string' ? result : String(result))
     }
   }
+}
+
+function normalizeQuery(query: Request['query']): Record<string, string> {
+  const normalized: Record<string, string> = {}
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      normalized[key] = value.map((item) => String(item)).join(',')
+    } else if (value === undefined) {
+      normalized[key] = ''
+    } else {
+      normalized[key] = String(value)
+    }
+  })
+
+  return normalized
+}
+
+function normalizeParams(params: Request['params']): Record<string, string> {
+  const normalized: Record<string, string> = {}
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      normalized[key] = value.map((item) => String(item)).join(',')
+    } else {
+      normalized[key] = String(value)
+    }
+  })
+
+  return normalized
+}
+
+function normalizeHeaders(headers: Request['headers']): Record<string, string> {
+  const normalized: Record<string, string> = {}
+
+  Object.entries(headers).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      normalized[key.toLowerCase()] = value.join(',')
+    } else if (value === undefined) {
+      normalized[key.toLowerCase()] = ''
+    } else {
+      normalized[key.toLowerCase()] = String(value)
+    }
+  })
+
+  return normalized
+}
+
+function normalizeBody(body: Request['body']): Record<string, unknown> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return {}
+  }
+
+  return body as Record<string, unknown>
 }

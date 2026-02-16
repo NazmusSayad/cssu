@@ -7,6 +7,16 @@ export type HttpMethod =
   | 'HEAD'
   | 'OPTIONS'
 
+export type JsonPrimitive = string | number | boolean | null
+
+export interface JsonObject {
+  [key: string]: JsonPrimitive | JsonObject | JsonArray
+}
+
+export type JsonArray = Array<JsonPrimitive | JsonObject | JsonArray>
+
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray
+
 export interface ServerConfig {
   port: number
   database?: string
@@ -35,7 +45,7 @@ export type Expression =
   | { type: 'header'; headerName: string }
   | { type: 'sql'; query: string; args: Expression[] }
   | { type: 'if'; branches: IfBranch[]; elseValue?: Expression }
-  | { type: 'json'; value: any }
+  | { type: 'json'; value: JsonValue }
   | { type: 'html'; value: string }
   | { type: 'concat'; parts: Expression[] }
 
@@ -56,10 +66,10 @@ export type Condition =
   | { type: 'or'; conditions: Condition[] }
   | { type: 'not'; condition: Condition }
 
-export interface StatusValue {
-  type: 'literal' | 'var' | 'if'
-  value: number | Expression
-}
+export type StatusValue =
+  | { type: 'literal'; value: number }
+  | { type: 'var'; value: Expression }
+  | { type: 'if'; value: Expression }
 
 export interface ReturnValue {
   type: 'json' | 'html'
@@ -75,7 +85,7 @@ export interface ParsedCSS {
 export interface RequestContext {
   params: Record<string, string>
   query: Record<string, string>
-  body: Record<string, any>
+  body: Record<string, unknown>
   headers: Record<string, string>
-  variables: Record<string, any>
+  variables: Record<string, unknown>
 }
