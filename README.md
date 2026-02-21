@@ -1,4 +1,4 @@
-# css-server
+# butcss
 
 A PostCSS-based backend framework that lets you write server logic in CSS syntax.
 
